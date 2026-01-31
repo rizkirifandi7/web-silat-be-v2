@@ -17,7 +17,7 @@ router.get(
 );
 
 // Admin only
-router.put(
+router.patch(
   "/:id",
   authenticate,
   authorize("admin"),

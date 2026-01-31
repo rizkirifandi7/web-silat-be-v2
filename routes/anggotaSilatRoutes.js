@@ -20,7 +20,7 @@ router.get(
   authenticate,
   anggotaSilatController.getAnggotaByUserId,
 );
-router.put("/:id", authenticate, anggotaSilatController.updateAnggota); // Will check ownership in controller
+router.patch("/:id", authenticate, anggotaSilatController.updateAnggota); // Will check ownership in controller
 router.delete(
   "/:id",
   authenticate,

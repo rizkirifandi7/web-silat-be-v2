@@ -27,7 +27,7 @@ router.get(
   authenticate,
   registrationController.getRegistrationsByUser,
 );
-router.put(
+router.patch(
   "/:id",
   authenticate,
   registrationController.updateRegistrationStatus,

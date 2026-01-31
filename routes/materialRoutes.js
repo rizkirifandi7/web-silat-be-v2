@@ -54,7 +54,7 @@ router.post(
   uploadMaterial,
   materialController.uploadMaterial,
 );
-router.put(
+router.patch(
   "/:id",
   authenticate,
   authorize("admin"),

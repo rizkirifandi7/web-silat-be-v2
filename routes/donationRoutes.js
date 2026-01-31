@@ -36,7 +36,7 @@ router.post(
   uploadImage.single("image"),
   donationCampaignController.createCampaign,
 );
-router.put(
+router.patch(
   "/campaigns/:id",
   authenticate,
   donationCampaignController.updateCampaign,

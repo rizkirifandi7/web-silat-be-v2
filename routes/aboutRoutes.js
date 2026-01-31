@@ -13,7 +13,7 @@ router.get("/", optionalAuth, aboutController.getAboutInfo);
 router.get("/founders", optionalAuth, aboutController.getFounders);
 
 // Admin only routes - with optional file upload
-router.put(
+router.patch(
   "/",
   authenticate,
   authorize("admin"),
@@ -27,7 +27,7 @@ router.post(
   uploadImage.single("photo"),
   aboutController.createFounder,
 );
-router.put(
+router.patch(
   "/founders/:id",
   authenticate,
   authorize("admin"),

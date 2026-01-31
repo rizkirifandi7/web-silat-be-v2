@@ -24,7 +24,7 @@ router.post(
   authorize("admin", "anggota"),
   eventController.createEvent,
 );
-router.put("/:id", authenticate, eventController.updateEvent); // Will check ownership in controller
+router.patch("/:id", authenticate, eventController.updateEvent); // Will check ownership in controller
 router.delete("/:id", authenticate, eventController.deleteEvent); // Will check ownership in controller
 
 module.exports = router;

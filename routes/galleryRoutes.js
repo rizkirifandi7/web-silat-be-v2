@@ -21,7 +21,7 @@ router.post(
   uploadImage.single("photo"),
   galleryController.uploadPhoto,
 );
-router.put("/:id", authenticate, galleryController.updatePhoto);
+router.patch("/:id", authenticate, galleryController.updatePhoto);
 router.delete("/:id", authenticate, galleryController.deletePhoto);
 
 module.exports = router;
