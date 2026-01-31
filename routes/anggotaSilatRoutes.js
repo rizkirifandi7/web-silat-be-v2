@@ -1,0 +1,31 @@
+const express = require("express");
+const router = express.Router();
+const anggotaSilatController = require("../controllers/anggotaSilatController");
+const { authenticate, authorize } = require("../middleware/authMiddleware");
+
+// Public route - get statistics
+router.get("/stats", anggotaSilatController.getAnggotaStats);
+
+// Protected routes - require authentication
+router.post(
+  "/",
+  authenticate,
+  authorize("anggota"),
+  anggotaSilatController.createAnggota,
+);
+router.get("/", authenticate, anggotaSilatController.getAllAnggota);
+router.get("/:id", authenticate, anggotaSilatController.getAnggotaById);
+router.get(
+  "/user/:userId",
+  authenticate,
+  anggotaSilatController.getAnggotaByUserId,
+);
+router.put("/:id", authenticate, anggotaSilatController.updateAnggota); // Will check ownership in controller
+router.delete(
+  "/:id",
+  authenticate,
+  authorize("admin"),
+  anggotaSilatController.deleteAnggota,
+);
+
+module.exports = router;
