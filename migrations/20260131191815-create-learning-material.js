@@ -1,19 +1,6 @@
 "use strict";
 module.exports = {
   async up(queryInterface, Sequelize) {
-    // Drop enum types if exist (for re-migration/reset)
-    await queryInterface.sequelize.query(
-      'DROP TYPE IF EXISTS "enum_LearningMaterials_sabuk" CASCADE;',
-    );
-    await queryInterface.sequelize.query(
-      'DROP TYPE IF EXISTS "enum_LearningMaterials_accessLevel" CASCADE;',
-    );
-    await queryInterface.sequelize.query(
-      'DROP TYPE IF EXISTS "enum_LearningMaterials_type" CASCADE;',
-    );
-    await queryInterface.sequelize.query(
-      'DROP TYPE IF EXISTS "enum_LearningMaterials_category" CASCADE;',
-    );
     await queryInterface.createTable("LearningMaterials", {
       id: {
         allowNull: false,

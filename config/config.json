@@ -7,10 +7,10 @@
     "dialect": "postgres"
   },
   "test": {
-    "username": "root",
-    "password": null,
-    "database": "database_test",
-    "host": "127.0.0.1",
+    "username": "pusamada_admin",
+    "password": "Y)0i*8hIMT,3",
+    "database": "pusamada_db",
+    "host": "api.pusamadaind.com",
     "dialect": "mysql"
   },
   "production": {
