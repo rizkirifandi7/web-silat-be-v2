@@ -235,6 +235,7 @@ exports.updateCampaign = async (req, res) => {
 };
 
 // Delete/Cancel campaign
+// Delete/Cancel campaign
 exports.deleteCampaign = async (req, res) => {
   try {
     const { id } = req.params;
@@ -258,16 +259,29 @@ exports.deleteCampaign = async (req, res) => {
       });
     }
 
-    await campaign.update({ status: "cancelled" });
+    // Check for existing donations
+    const donationCount = await Donation.count({
+      where: { campaignId: id },
+    });
+
+    if (donationCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Cannot delete campaign with existing donations. Please cancel it instead.",
+      });
+    }
+
+    await campaign.destroy();
 
     res.json({
       success: true,
-      message: "Campaign cancelled successfully",
+      message: "Campaign deleted successfully",
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Error cancelling campaign",
+      message: "Error deleting campaign",
       error: error.message,
     });
   }

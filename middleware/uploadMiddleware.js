@@ -19,25 +19,11 @@ const imageStorage = new CloudinaryStorage({
   },
 });
 
-// Storage for videos (Materials)
-const videoStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: "silat/videos",
-    resource_type: "video",
-    allowed_formats: ["mp4", "mov", "avi", "mkv", "webm"],
-  },
-});
+// Storage for videos (Materials) - use memory storage for external API upload
+const videoStorage = multer.memoryStorage();
 
-// Storage for documents (Materials)
-const documentStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: "silat/documents",
-    resource_type: "raw",
-    allowed_formats: ["pdf", "doc", "docx", "ppt", "pptx"],
-  },
-});
+// Storage for documents (Materials) - use memory storage for external API upload
+const documentStorage = multer.memoryStorage();
 
 // File filter for images
 const imageFilter = (req, file, cb) => {
@@ -99,10 +85,49 @@ const uploadDocument = multer({
   },
 });
 
+// Unified material upload (accepts both video and document)
+const uploadMaterial = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    // Accept both video and document files
+    const videoMimes = [
+      "video/mp4",
+      "video/quicktime",
+      "video/x-msvideo",
+      "video/x-matroska",
+      "video/webm",
+    ];
+    const documentMimes = [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ];
+
+    const allAllowedMimes = [...videoMimes, ...documentMimes];
+
+    if (allAllowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(
+        new Error(
+          "Only video (MP4, MOV, AVI, MKV, WEBM) and document (PDF, DOC, DOCX, PPT, PPTX) files are allowed!",
+        ),
+        false,
+      );
+    }
+  },
+  limits: {
+    fileSize: 100 * 1024 * 1024, // 100MB (max for videos)
+  },
+});
+
 // Export multer instances
 module.exports = {
   uploadImage,
   uploadVideo,
   uploadDocument,
+  uploadMaterial,
   cloudinary,
 };

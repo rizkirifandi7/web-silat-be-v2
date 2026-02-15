@@ -16,4 +16,7 @@ router.put("/profile", authenticate, authController.updateProfile);
 router.put("/change-password", authenticate, authController.changePassword);
 router.get("/verify", authenticate, authController.verifyToken);
 
+// Logout (clear cookie)
+router.post("/logout", authController.logout);
+
 module.exports = router;

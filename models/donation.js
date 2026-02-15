@@ -35,8 +35,16 @@ module.exports = (sequelize, DataTypes) => {
       },
       donorEmail: {
         type: DataTypes.STRING,
+        allowNull: true,
         validate: {
-          isEmail: true,
+          isEmailOrEmpty(value) {
+            if (value && value.length > 0) {
+              const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+              if (!emailRegex.test(value)) {
+                throw new Error("Format email tidak valid");
+              }
+            }
+          },
         },
       },
       donorPhone: {
@@ -65,6 +73,7 @@ module.exports = (sequelize, DataTypes) => {
           "shopeepay",
           "qris",
           "other",
+          "midtrans",
         ),
         allowNull: false,
       },

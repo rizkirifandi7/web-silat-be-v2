@@ -106,9 +106,20 @@ exports.createPayment = async (req, res) => {
 exports.handleMidtransNotification = async (req, res) => {
   try {
     const notification = req.body;
+    let statusResponse;
 
-    // Verify notification authenticity
-    const statusResponse = await snap.transaction.notification(notification);
+    // For local testing, bypass Midtrans verification
+    const isLocalTesting =
+      process.env.NODE_ENV === "development" ||
+      !process.env.MIDTRANS_SERVER_KEY ||
+      process.env.MIDTRANS_SERVER_KEY === "YOUR_SERVER_KEY";
+
+    if (isLocalTesting) {
+      statusResponse = notification;
+    } else {
+      // Production: Verify notification authenticity with Midtrans
+      statusResponse = await snap.transaction.notification(notification);
+    }
 
     const orderId = statusResponse.order_id;
     const transactionStatus = statusResponse.transaction_status;
@@ -148,14 +159,20 @@ exports.handleMidtransNotification = async (req, res) => {
     // Update payment
     await payment.update({
       paymentStatus,
-      midtransTransactionId: statusResponse.transaction_id,
+      midtransTransactionId:
+        statusResponse.transaction_id || `TEST-${Date.now()}`,
       paymentDate: paymentStatus === "settlement" ? new Date() : null,
-      transactionId: statusResponse.transaction_id,
+      transactionId: statusResponse.transaction_id || `TEST-${Date.now()}`,
     });
 
     res.json({
       success: true,
       message: "Notification processed successfully",
+      mode: isLocalTesting ? "local_testing" : "production",
+      data: {
+        orderId,
+        paymentStatus,
+      },
     });
   } catch (error) {
     res.status(500).json({
@@ -220,7 +237,7 @@ exports.getPaymentById = async (req, res) => {
         {
           model: User,
           as: "user",
-          attributes: ["id", "firstName", "lastName", "email"],
+          attributes: ["id", "nama", "email"],
         },
       ],
     });

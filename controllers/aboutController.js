@@ -32,21 +32,38 @@ exports.getAboutInfo = async (req, res) => {
       },
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error fetching about info",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching about info",
+      error: error.message,
+    });
   }
 };
 
 // Update about info (WITH MULTER - admin only)
 exports.updateAboutInfo = async (req, res) => {
   try {
-    const { sejarah, visi, misi, filosofiLogo } = req.body;
+    const { sejarah, visi } = req.body;
+    let { misi, filosofiLogo } = req.body;
     const updatedBy = req.user.userId;
+
+    // Handle misi JSON string if it comes from FormData
+    if (typeof misi === "string") {
+      try {
+        misi = JSON.parse(misi);
+      } catch (e) {
+        // Fallback or keep as string if it's not JSON
+      }
+    }
+
+    // Handle filosofiLogo JSON string if it comes from FormData
+    if (typeof filosofiLogo === "string") {
+      try {
+        filosofiLogo = JSON.parse(filosofiLogo);
+      } catch (e) {
+        // Fallback or keep as string
+      }
+    }
 
     // Get logo URL from uploaded file if exists, otherwise use body
     const logoUrl = req.file ? req.file.path : req.body.logoUrl;
@@ -90,13 +107,11 @@ exports.updateAboutInfo = async (req, res) => {
       data: updatedAbout,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error updating about info",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error updating about info",
+      error: error.message,
+    });
   }
 };
 
@@ -110,13 +125,11 @@ exports.getFounders = async (req, res) => {
 
     res.json({ success: true, data: founders });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error fetching founders",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching founders",
+      error: error.message,
+    });
   }
 };
 
@@ -142,21 +155,17 @@ exports.createFounder = async (req, res) => {
       order: order || 0,
     });
 
-    res
-      .status(201)
-      .json({
-        success: true,
-        message: "Founder created successfully",
-        data: founder,
-      });
+    res.status(201).json({
+      success: true,
+      message: "Founder created successfully",
+      data: founder,
+    });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error creating founder",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error creating founder",
+      error: error.message,
+    });
   }
 };
 
@@ -185,13 +194,11 @@ exports.updateFounder = async (req, res) => {
       data: founder,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error updating founder",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error updating founder",
+      error: error.message,
+    });
   }
 };
 
@@ -210,12 +217,10 @@ exports.deleteFounder = async (req, res) => {
 
     res.json({ success: true, message: "Founder deleted successfully" });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error deleting founder",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error deleting founder",
+      error: error.message,
+    });
   }
 };

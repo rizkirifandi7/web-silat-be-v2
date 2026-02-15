@@ -20,10 +20,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.TEXT,
       },
       misi: {
-        type: DataTypes.TEXT,
+        type: DataTypes.JSON,
       },
       filosofiLogo: {
-        type: DataTypes.TEXT,
+        type: DataTypes.JSON,
       },
       logoUrl: {
         type: DataTypes.TEXT,

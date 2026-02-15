@@ -14,8 +14,12 @@ const donationRoutes = require("./routes/donationRoutes");
 const galleryRoutes = require("./routes/galleryRoutes");
 const materialRoutes = require("./routes/materialRoutes");
 const aboutRoutes = require("./routes/aboutRoutes");
+const userRoutes = require("./routes/userRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
+const productRoutes = require("./routes/productRoutes");
 
-// CORS Configuration
+// ...
+
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -41,6 +45,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+const cookieParser = require("cookie-parser");
+app.use(cookieParser());
 
 // Request logging middleware (development only)
 if (process.env.NODE_ENV === "development") {
@@ -65,6 +71,7 @@ app.get("/", (req, res) => {
       gallery: "/api/gallery",
       materials: "/api/materials",
       about: "/api/about",
+      products: "/api/products",
     },
   });
 });
@@ -78,6 +85,9 @@ app.use("/api/donations", donationRoutes);
 app.use("/api/gallery", galleryRoutes);
 app.use("/api/materials", materialRoutes);
 app.use("/api/about", aboutRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/products", productRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

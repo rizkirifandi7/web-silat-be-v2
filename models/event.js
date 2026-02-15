@@ -34,7 +34,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         validate: {
           notEmpty: true,
-          len: [5, 255],
+          len: [3, 255],
         },
       },
       description: {
@@ -80,7 +80,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: 0,
         validate: {
-          min: 1,
+          min: 0,
         },
       },
       registeredCount: {

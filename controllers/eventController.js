@@ -33,7 +33,7 @@ exports.getAllEvents = async (req, res) => {
         {
           model: User,
           as: "organizer",
-          attributes: ["id", "firstName", "lastName", "email"],
+          attributes: ["id", "nama", "email"],
         },
       ],
       limit: parseInt(limit),
@@ -70,7 +70,7 @@ exports.getEventById = async (req, res) => {
         {
           model: User,
           as: "organizer",
-          attributes: ["id", "firstName", "lastName", "email"],
+          attributes: ["id", "nama", "email"],
         },
         {
           model: EventRegistration,
@@ -79,7 +79,7 @@ exports.getEventById = async (req, res) => {
             {
               model: User,
               as: "user",
-              attributes: ["id", "firstName", "lastName", "email"],
+              attributes: ["id", "nama", "email"],
             },
           ],
         },
@@ -111,6 +111,14 @@ exports.createEvent = async (req, res) => {
   try {
     const eventData = req.body;
 
+    // Add organizerId from authenticated user
+    eventData.organizerId = req.user.userId;
+
+    // Add image URL if uploaded
+    if (req.file) {
+      eventData.imageUrl = req.file.path;
+    }
+
     // Validate required fields
     if (!eventData.title || !eventData.eventDate || !eventData.organizerId) {
       return res.status(400).json({
@@ -141,6 +149,11 @@ exports.updateEvent = async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
 
+    // Add image URL if uploaded
+    if (req.file) {
+      updateData.imageUrl = req.file.path;
+    }
+
     const event = await Event.findByPk(id);
 
     if (!event) {
@@ -166,12 +179,19 @@ exports.updateEvent = async (req, res) => {
   }
 };
 
-// Delete event (soft delete by setting status to cancelled)
+// Delete event (hard delete with safety check)
 exports.deleteEvent = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const event = await Event.findByPk(id);
+    const event = await Event.findByPk(id, {
+      include: [
+        {
+          model: EventRegistration,
+          as: "registrations",
+        },
+      ],
+    });
 
     if (!event) {
       return res.status(404).json({
@@ -180,11 +200,20 @@ exports.deleteEvent = async (req, res) => {
       });
     }
 
-    await event.update({ status: "cancelled" });
+    // Check if event has registrations
+    if (event.registrations && event.registrations.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Cannot delete event with existing registrations. Please cancel it instead.",
+      });
+    }
+
+    await event.destroy();
 
     res.json({
       success: true,
-      message: "Event cancelled successfully",
+      message: "Event deleted successfully",
     });
   } catch (error) {
     res.status(500).json({
@@ -211,7 +240,7 @@ exports.getUpcomingEvents = async (req, res) => {
         {
           model: User,
           as: "organizer",
-          attributes: ["id", "firstName", "lastName", "email"],
+          attributes: ["id", "nama", "email"],
         },
       ],
       limit: parseInt(limit),

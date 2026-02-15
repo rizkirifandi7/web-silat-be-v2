@@ -1,28 +1,30 @@
 const jwt = require("jsonwebtoken");
 const { User } = require("../models");
 
-// Authenticate - Verify JWT token
+// Authenticate - Verify JWT token (from httpOnly cookie or Authorization header)
 exports.authenticate = async (req, res, next) => {
   try {
-    // Get token from header
+    let token = null;
+    // 1. Try from Authorization header
     const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.substring(7);
+    }
+    // 2. Try from cookie (httpOnly)
+    if (!token && req.cookies && req.cookies.token) {
+      token = req.cookies.token;
+    }
+    if (!token) {
       return res.status(401).json({
         success: false,
         message: "No token provided. Please login to access this resource.",
       });
     }
-
-    // Extract token
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-
     // Verify token
     const decoded = jwt.verify(
       token,
       process.env.JWT_SECRET || "your_jwt_secret_key",
     );
-
     // Check if user still exists
     const user = await User.findByPk(decoded.userId);
     if (!user) {
@@ -31,14 +33,12 @@ exports.authenticate = async (req, res, next) => {
         message: "User no longer exists",
       });
     }
-
     // Attach user info to request
     req.user = {
       userId: decoded.userId,
       email: decoded.email,
       role: decoded.role,
     };
-
     next();
   } catch (error) {
     if (error.name === "JsonWebTokenError") {
@@ -47,14 +47,12 @@ exports.authenticate = async (req, res, next) => {
         message: "Invalid token",
       });
     }
-
     if (error.name === "TokenExpiredError") {
       return res.status(401).json({
         success: false,
         message: "Token expired. Please login again.",
       });
     }
-
     res.status(500).json({
       success: false,
       message: "Error authenticating user",
@@ -164,6 +162,7 @@ exports.checkOwnership = (Model, ownerField = "userId") => {
 
 // Rate limiting helper (simple in-memory implementation)
 const loginAttempts = new Map();
+exports.loginAttempts = loginAttempts;
 
 exports.rateLimitLogin = (req, res, next) => {
   const email = req.body.email;

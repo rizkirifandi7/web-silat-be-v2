@@ -1,15 +1,17 @@
 const { LearningMaterial, User } = require("../models");
 const { Op } = require("sequelize");
+const { uploadToExternalAPI } = require("../services/uploadService");
+const axios = require("axios");
 
 // Get all materials
 exports.getAllMaterials = async (req, res) => {
   try {
-    const { type, category, level, search, page = 1, limit = 20 } = req.query;
+    const { type, category, sabuk, search, page = 1, limit = 20 } = req.query;
 
     const where = { isActive: true };
     if (type) where.type = type;
     if (category) where.category = category;
-    if (level) where.level = level;
+    if (sabuk) where.sabuk = sabuk;
     if (search) where.title = { [Op.iLike]: `%${search}%` };
 
     const offset = (page - 1) * limit;
@@ -33,13 +35,11 @@ exports.getAllMaterials = async (req, res) => {
       },
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error fetching materials",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching materials",
+      error: error.message,
+    });
   }
 };
 
@@ -58,20 +58,18 @@ exports.getMaterialById = async (req, res) => {
 
     res.json({ success: true, data: material });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error fetching material",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching material",
+      error: error.message,
+    });
   }
 };
 
 // Upload material (WITH MULTER - admin only)
 exports.uploadMaterial = async (req, res) => {
   try {
-    const { title, description, type, category, level, duration, accessLevel } =
+    const { title, description, type, category, sabuk, duration, accessLevel } =
       req.body;
     const uploadedBy = req.user.userId;
 
@@ -87,17 +85,18 @@ exports.uploadMaterial = async (req, res) => {
         .json({ success: false, message: "File is required" });
     }
 
-    // Get file info from Cloudinary upload
-    const fileUrl = req.file.path;
-    const fileSize = req.file.size;
+    // Upload file to external API
+    const uploadResult = await uploadToExternalAPI(req.file);
 
-    // Generate thumbnail for videos
+    // Get file info from external API upload
+    const fileUrl = uploadResult.fileUrl;
+    const fileSize = uploadResult.fileSize;
+
+    // For videos, we can use a placeholder thumbnail or generate one later
     let thumbnailUrl = null;
     if (type === "video") {
-      thumbnailUrl = req.file.path.replace(
-        "/upload/",
-        "/upload/so_0,w_400,h_300,c_fill/",
-      );
+      // You can implement thumbnail generation later if needed
+      thumbnailUrl = null;
     }
 
     const material = await LearningMaterial.create({
@@ -105,7 +104,7 @@ exports.uploadMaterial = async (req, res) => {
       description,
       type,
       category: category || "lainnya",
-      level: level || "all",
+      sabuk: sabuk || "Belum punya",
       fileUrl,
       thumbnailUrl,
       fileSize,
@@ -118,21 +117,23 @@ exports.uploadMaterial = async (req, res) => {
       include: [{ model: User, as: "uploader", attributes: ["id", "nama"] }],
     });
 
-    res
-      .status(201)
-      .json({
-        success: true,
-        message: "Material uploaded successfully",
-        data: materialWithDetails,
-      });
+    res.status(201).json({
+      success: true,
+      message: "Material uploaded successfully",
+      data: materialWithDetails,
+      uploadInfo: {
+        fileName: uploadResult.fileName,
+        fileType: uploadResult.fileType,
+        fileSize: uploadResult.fileSize,
+        fileId: uploadResult.fileId,
+      },
+    });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error uploading material",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error uploading material",
+      error: error.message,
+    });
   }
 };
 
@@ -159,13 +160,11 @@ exports.updateMaterial = async (req, res) => {
       data: updatedMaterial,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error updating material",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error updating material",
+      error: error.message,
+    });
   }
 };
 
@@ -180,17 +179,51 @@ exports.deleteMaterial = async (req, res) => {
         .json({ success: false, message: "Material not found" });
     }
 
+    // Hapus file di cloud jika ada fileId (POST ke /file-entries/delete)
+    let cloudDeleteSuccess = true;
+    let cloudDeleteError = null;
+    if (material.fileId) {
+      try {
+        await axios.post(
+          `https://cloud.shelterdata.id/api/v1/file-entries/delete`,
+          {
+            entryIds: [String(material.fileId)],
+            deleteForever: true,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.EXTERNAL_UPLOAD_API_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      } catch (err) {
+        cloudDeleteSuccess = false;
+        cloudDeleteError = err.response?.data || err.message;
+        // Tambahkan log error detail ke console
+        console.error("Cloud file delete error:", {
+          fileId: material.fileId,
+          error: err.response?.data || err.message,
+          status: err.response?.status,
+          headers: err.response?.headers,
+        });
+      }
+    }
+
     await material.update({ isActive: false });
 
-    res.json({ success: true, message: "Material deleted successfully" });
+    res.json({
+      success: true,
+      message: "Material deleted successfully",
+      cloudDeleteSuccess,
+      cloudDeleteError,
+    });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error deleting material",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error deleting material",
+      error: error.message,
+    });
   }
 };
 
@@ -209,13 +242,11 @@ exports.incrementView = async (req, res) => {
 
     res.json({ success: true, message: "View count incremented" });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error incrementing view count",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error incrementing view count",
+      error: error.message,
+    });
   }
 };
 
@@ -234,12 +265,10 @@ exports.incrementDownload = async (req, res) => {
 
     res.json({ success: true, message: "Download count incremented" });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error incrementing download count",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error incrementing download count",
+      error: error.message,
+    });
   }
 };

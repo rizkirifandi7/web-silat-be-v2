@@ -192,7 +192,7 @@ exports.getRegistrationsByUser = async (req, res) => {
             {
               model: User,
               as: "organizer",
-              attributes: ["id", "firstName", "lastName", "email"],
+              attributes: ["id", "nama", "email"],
             },
           ],
         },
@@ -228,7 +228,7 @@ exports.getRegistrationsByEvent = async (req, res) => {
         {
           model: User,
           as: "user",
-          attributes: ["id", "firstName", "lastName", "email"],
+          attributes: ["id", "nama", "email"],
         },
         {
           model: Payment,

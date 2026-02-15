@@ -39,10 +39,20 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: "lainnya",
       },
-      level: {
-        type: DataTypes.ENUM("beginner", "intermediate", "advanced", "all"),
+      sabuk: {
+        type: DataTypes.ENUM(
+          "Belum punya",
+          "LULUS Binfistal",
+          "Sabuk Putih",
+          "Sabuk Kuning",
+          "Sabuk Hijau",
+          "Sabuk Merah",
+          "Sabuk Hitam Wiraga 1",
+          "Sabuk Hitam Wiraga 2",
+          "Sabuk Hitam Wiraga 3",
+        ),
         allowNull: false,
-        defaultValue: "all",
+        defaultValue: "Belum punya",
       },
       fileUrl: {
         type: DataTypes.TEXT,

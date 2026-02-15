@@ -130,16 +130,36 @@ exports.createDonation = async (req, res) => {
   }
 };
 
-// Handle Midtrans notification
+// Handle Midtrans notification (webhook) for donation
 exports.handleMidtransNotification = async (req, res) => {
   try {
     const notification = req.body;
+    let statusResponse;
 
-    const orderId = notification.order_id;
-    const transactionStatus = notification.transaction_status;
-    const fraudStatus = notification.fraud_status;
+    // For local testing, bypass Midtrans verification
+    const isLocalTesting =
+      process.env.NODE_ENV === "development" ||
+      !process.env.MIDTRANS_SERVER_KEY ||
+      process.env.MIDTRANS_SERVER_KEY === "YOUR_SERVER_KEY";
 
-    // Find donation
+    if (isLocalTesting) {
+      statusResponse = notification;
+    } else {
+      // Production: Verify notification authenticity with Midtrans
+      const midtransClient = require("midtrans-client");
+      const snap = new midtransClient.Snap({
+        isProduction: process.env.MIDTRANS_IS_PRODUCTION === "true",
+        serverKey: process.env.MIDTRANS_SERVER_KEY,
+        clientKey: process.env.MIDTRANS_CLIENT_KEY,
+      });
+      statusResponse = await snap.transaction.notification(notification);
+    }
+
+    const orderId = statusResponse.order_id;
+    const transactionStatus = statusResponse.transaction_status;
+    const fraudStatus = statusResponse.fraud_status;
+
+    // Find donation by order ID
     const donation = await Donation.findOne({
       where: { midtransOrderId: orderId },
     });
@@ -151,34 +171,41 @@ exports.handleMidtransNotification = async (req, res) => {
       });
     }
 
+    // Update donation status based on Midtrans response
     let paymentStatus = "pending";
 
-    if (transactionStatus == "capture") {
-      if (fraudStatus == "accept") {
+    if (transactionStatus === "capture") {
+      if (fraudStatus === "accept") {
         paymentStatus = "settlement";
       }
-    } else if (transactionStatus == "settlement") {
+    } else if (transactionStatus === "settlement") {
       paymentStatus = "settlement";
     } else if (
-      transactionStatus == "cancel" ||
-      transactionStatus == "deny" ||
-      transactionStatus == "expire"
+      transactionStatus === "cancel" ||
+      transactionStatus === "deny" ||
+      transactionStatus === "expire"
     ) {
       paymentStatus = transactionStatus;
-    } else if (transactionStatus == "pending") {
+    } else if (transactionStatus === "pending") {
       paymentStatus = "pending";
     }
 
     // Update donation
     await donation.update({
       paymentStatus,
-      midtransTransactionId: notification.transaction_id,
+      midtransTransactionId:
+        statusResponse.transaction_id || `TEST-${Date.now()}`,
       paidAt: paymentStatus === "settlement" ? new Date() : null,
     });
 
     res.json({
       success: true,
-      message: "Notification processed",
+      message: "Notification processed successfully",
+      mode: isLocalTesting ? "local_testing" : "production",
+      data: {
+        orderId,
+        paymentStatus,
+      },
     });
   } catch (error) {
     res.status(500).json({

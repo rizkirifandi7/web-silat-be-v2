@@ -1,3 +1,8 @@
+// Logout user (clear cookie)
+exports.logout = (req, res) => {
+  res.clearCookie("token");
+  res.json({ success: true, message: "Logout successful" });
+};
 const { User, AnggotaSilat } = require("../models");
 const jwt = require("jsonwebtoken");
 
@@ -141,10 +146,24 @@ exports.login = async (req, res) => {
       });
     }
 
+    // Reset login attempts on success (if using rateLimitLogin)
+    const { loginAttempts } = require("../middleware/authMiddleware");
+    if (loginAttempts && typeof loginAttempts.delete === "function") {
+      loginAttempts.delete(email);
+    }
+
     // Generate token
     const token = generateToken(user);
 
-    // Prepare user response
+    // Set token as httpOnly cookie
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // only send cookie over https in production
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    // Prepare user response (no token in body)
     const userResponse = {
       id: user.id,
       nama: user.nama,
@@ -154,26 +173,21 @@ exports.login = async (req, res) => {
       no_hp: user.no_hp,
       foto: user.foto,
       foto_url: user.foto_url,
+      tingkatan_sabuk: user.anggotaSilat
+        ? user.anggotaSilat.tingkatan_sabuk
+        : null,
     };
-
-    // Include anggota data if exists
-    if (user.anggotaSilat) {
-      userResponse.anggotaSilat = {
-        id: user.anggotaSilat.id,
-        nomor_anggota: user.anggotaSilat.nomor_anggota,
-        tingkatan_sabuk: user.anggotaSilat.tingkatan_sabuk,
-        status_aktif: user.anggotaSilat.status_aktif,
-      };
-    }
 
     res.json({
       success: true,
       message: "Login successful",
-      data: {
-        token,
-        user: userResponse,
-      },
+      data: userResponse,
     });
+    // Logout user (clear cookie)
+    exports.logout = (req, res) => {
+      res.clearCookie("token");
+      res.json({ success: true, message: "Logout successful" });
+    };
   } catch (error) {
     res.status(500).json({
       success: false,

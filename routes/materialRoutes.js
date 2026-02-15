@@ -2,21 +2,7 @@ const express = require("express");
 const router = express.Router();
 const materialController = require("../controllers/materialController");
 const { authenticate, authorize } = require("../middleware/authMiddleware");
-const {
-  uploadVideo,
-  uploadDocument,
-} = require("../middleware/uploadMiddleware");
-
-// Middleware to choose upload type based on material type
-const uploadMaterial = (req, res, next) => {
-  const type = req.body.type || req.query.type;
-
-  if (type === "video") {
-    return uploadVideo.single("file")(req, res, next);
-  } else {
-    return uploadDocument.single("file")(req, res, next);
-  }
-};
+const { uploadMaterial } = require("../middleware/uploadMiddleware");
 
 // All routes require authentication (anggota only)
 router.get(
@@ -51,7 +37,7 @@ router.post(
   "/",
   authenticate,
   authorize("admin"),
-  uploadMaterial,
+  uploadMaterial.single("file"),
   materialController.uploadMaterial,
 );
 router.patch(
