@@ -3,8 +3,9 @@ const router = express.Router();
 const anggotaSilatController = require("../controllers/anggotaSilatController");
 const { authenticate, authorize } = require("../middleware/authMiddleware");
 
-// Public route - get statistics
+// Public routes
 router.get("/stats", anggotaSilatController.getAnggotaStats);
+router.get("/verify/:id", anggotaSilatController.verifyAnggota);
 
 // Protected routes - require authentication
 router.post(

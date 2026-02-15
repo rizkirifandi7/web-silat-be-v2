@@ -380,3 +380,73 @@ exports.getAnggotaStats = async (req, res) => {
     });
   }
 };
+
+// Verify anggota by ID (Public)
+exports.verifyAnggota = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const anggota = await User.findByPk(id, {
+      include: [
+        {
+          model: AnggotaSilat,
+          as: "anggotaSilat",
+          attributes: [
+            "nomor_anggota",
+            "status_aktif",
+            "tingkatan_sabuk",
+            "tanggal_bergabung",
+          ],
+        },
+      ],
+    });
+
+    if (!anggota) {
+      return res.status(404).json({
+        success: false,
+        message: "Anggota tidak ditemukan",
+      });
+    }
+
+    const detail = anggota.anggotaSilat;
+
+    if (!detail) {
+      return res.status(404).json({
+        success: false,
+        message: "Profil anggota tidak ditemukan untuk user ini",
+      });
+    }
+
+    if (!detail.status_aktif) {
+      return res.status(400).json({
+        success: false,
+        message: "Anggota tersebut sudah tidak aktif",
+        data: {
+          nama: anggota.nama,
+          nomor_anggota: detail.nomor_anggota,
+          status_aktif: false,
+        },
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Data anggota terverifikasi",
+      data: {
+        id: anggota.id,
+        nomor_anggota: detail.nomor_anggota,
+        nama: anggota.nama,
+        foto_url: anggota.foto_url,
+        tingkatan_sabuk: detail.tingkatan_sabuk,
+        status_aktif: detail.status_aktif,
+        tanggal_bergabung: detail.tanggal_bergabung,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error verifying anggota",
+      error: error.message,
+    });
+  }
+};
