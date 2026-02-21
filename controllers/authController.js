@@ -1,8 +1,3 @@
-// Logout user (clear cookie)
-exports.logout = (req, res) => {
-  res.clearCookie("token");
-  res.json({ success: true, message: "Logout successful" });
-};
 const { User, AnggotaSilat } = require("../models");
 const jwt = require("jsonwebtoken");
 
@@ -19,6 +14,14 @@ const generateToken = (user) => {
       expiresIn: process.env.JWT_EXPIRES_IN || "7d",
     },
   );
+};
+
+// Cookie options (shared between login and logout for consistency)
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: "/",
 };
 
 // Register new user
@@ -157,9 +160,7 @@ exports.login = async (req, res) => {
 
     // Set token as httpOnly cookie
     res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // only send cookie over https in production
-      sameSite: "lax",
+      ...COOKIE_OPTIONS,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
@@ -183,11 +184,6 @@ exports.login = async (req, res) => {
       message: "Login successful",
       data: userResponse,
     });
-    // Logout user (clear cookie)
-    exports.logout = (req, res) => {
-      res.clearCookie("token");
-      res.json({ success: true, message: "Logout successful" });
-    };
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -195,6 +191,12 @@ exports.login = async (req, res) => {
       error: error.message,
     });
   }
+};
+
+// Logout user (clear cookie)
+exports.logout = (req, res) => {
+  res.clearCookie("token", COOKIE_OPTIONS);
+  res.json({ success: true, message: "Logout successful" });
 };
 
 // Get user profile

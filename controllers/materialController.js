@@ -69,8 +69,16 @@ exports.getMaterialById = async (req, res) => {
 // Upload material (WITH MULTER - admin only)
 exports.uploadMaterial = async (req, res) => {
   try {
-    const { title, description, type, category, sabuk, duration, accessLevel } =
-      req.body;
+    const {
+      title,
+      description,
+      type,
+      category,
+      sabuk,
+      duration,
+      accessLevel,
+      fileUrl: bodyFileUrl,
+    } = req.body;
     const uploadedBy = req.user.userId;
 
     if (!title || !type) {
@@ -79,23 +87,33 @@ exports.uploadMaterial = async (req, res) => {
         .json({ success: false, message: "Title and type are required" });
     }
 
-    if (!req.file) {
+    let fileUrl = null;
+    let fileSize = null;
+    let thumbnailUrl = null;
+    let uploadInfo = null;
+
+    if (req.file) {
+      // File upload mode — upload file to external API
+      const uploadResult = await uploadToExternalAPI(req.file);
+      fileUrl = uploadResult.fileUrl;
+      fileSize = uploadResult.fileSize;
+      uploadInfo = {
+        fileName: uploadResult.fileName,
+        fileType: uploadResult.fileType,
+        fileSize: uploadResult.fileSize,
+        fileId: uploadResult.fileId,
+      };
+    } else if (bodyFileUrl && bodyFileUrl.trim() !== "") {
+      // URL mode — use provided URL directly
+      fileUrl = bodyFileUrl.trim();
+    } else {
       return res
         .status(400)
-        .json({ success: false, message: "File is required" });
+        .json({ success: false, message: "File or URL is required" });
     }
 
-    // Upload file to external API
-    const uploadResult = await uploadToExternalAPI(req.file);
-
-    // Get file info from external API upload
-    const fileUrl = uploadResult.fileUrl;
-    const fileSize = uploadResult.fileSize;
-
     // For videos, we can use a placeholder thumbnail or generate one later
-    let thumbnailUrl = null;
     if (type === "video") {
-      // You can implement thumbnail generation later if needed
       thumbnailUrl = null;
     }
 
@@ -117,17 +135,17 @@ exports.uploadMaterial = async (req, res) => {
       include: [{ model: User, as: "uploader", attributes: ["id", "nama"] }],
     });
 
-    res.status(201).json({
+    const response = {
       success: true,
       message: "Material uploaded successfully",
       data: materialWithDetails,
-      uploadInfo: {
-        fileName: uploadResult.fileName,
-        fileType: uploadResult.fileType,
-        fileSize: uploadResult.fileSize,
-        fileId: uploadResult.fileId,
-      },
-    });
+    };
+
+    if (uploadInfo) {
+      response.uploadInfo = uploadInfo;
+    }
+
+    res.status(201).json(response);
   } catch (error) {
     res.status(500).json({
       success: false,
