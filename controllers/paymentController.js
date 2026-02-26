@@ -1,11 +1,17 @@
-const { Payment, Event, User, EventRegistration } = require("../models");
+const {
+  Payment,
+  Event,
+  User,
+  EventRegistration,
+  sequelize,
+} = require("../models");
 const midtransClient = require("midtrans-client");
 
 // Initialize Midtrans Snap
 const snap = new midtransClient.Snap({
-  isProduction: false, // Set to true for production
-  serverKey: process.env.MIDTRANS_SERVER_KEY || "YOUR_SERVER_KEY",
-  clientKey: process.env.MIDTRANS_CLIENT_KEY || "YOUR_CLIENT_KEY",
+  isProduction: process.env.MIDTRANS_IS_PRODUCTION === "true",
+  serverKey: process.env.MIDTRANS_SERVER_KEY,
+  clientKey: process.env.MIDTRANS_CLIENT_KEY,
 });
 
 // Create payment and get Midtrans token
@@ -104,6 +110,8 @@ exports.createPayment = async (req, res) => {
 
 // Midtrans notification handler (webhook)
 exports.handleMidtransNotification = async (req, res) => {
+  const t = await sequelize.transaction();
+
   try {
     const notification = req.body;
     let statusResponse;
@@ -111,8 +119,7 @@ exports.handleMidtransNotification = async (req, res) => {
     // For local testing, bypass Midtrans verification
     const isLocalTesting =
       process.env.NODE_ENV === "development" ||
-      !process.env.MIDTRANS_SERVER_KEY ||
-      process.env.MIDTRANS_SERVER_KEY === "YOUR_SERVER_KEY";
+      !process.env.MIDTRANS_SERVER_KEY;
 
     if (isLocalTesting) {
       statusResponse = notification;
@@ -131,6 +138,7 @@ exports.handleMidtransNotification = async (req, res) => {
     });
 
     if (!payment) {
+      await t.rollback();
       return res.status(404).json({
         success: false,
         message: "Payment not found",
@@ -142,7 +150,7 @@ exports.handleMidtransNotification = async (req, res) => {
 
     if (transactionStatus === "capture") {
       if (fraudStatus === "accept") {
-        paymentStatus = "capture";
+        paymentStatus = "settlement";
       }
     } else if (transactionStatus === "settlement") {
       paymentStatus = "settlement";
@@ -157,13 +165,42 @@ exports.handleMidtransNotification = async (req, res) => {
     }
 
     // Update payment
-    await payment.update({
-      paymentStatus,
-      midtransTransactionId:
-        statusResponse.transaction_id || `TEST-${Date.now()}`,
-      paymentDate: paymentStatus === "settlement" ? new Date() : null,
-      transactionId: statusResponse.transaction_id || `TEST-${Date.now()}`,
-    });
+    await payment.update(
+      {
+        paymentStatus,
+        midtransTransactionId:
+          statusResponse.transaction_id || `TEST-${Date.now()}`,
+        paymentDate: paymentStatus === "settlement" ? new Date() : null,
+        transactionId: statusResponse.transaction_id || `TEST-${Date.now()}`,
+      },
+      { transaction: t },
+    );
+
+    // Auto-register user to event after successful payment
+    if (paymentStatus === "settlement") {
+      const existingReg = await EventRegistration.findOne({
+        where: { eventId: payment.eventId, userId: payment.userId },
+      });
+
+      if (!existingReg) {
+        await EventRegistration.create(
+          {
+            eventId: payment.eventId,
+            userId: payment.userId,
+            paymentId: payment.id,
+            status: "confirmed",
+          },
+          { transaction: t },
+        );
+
+        const event = await Event.findByPk(payment.eventId);
+        if (event) {
+          await event.increment("registeredCount", { transaction: t });
+        }
+      }
+    }
+
+    await t.commit();
 
     res.json({
       success: true,
@@ -175,6 +212,7 @@ exports.handleMidtransNotification = async (req, res) => {
       },
     });
   } catch (error) {
+    await t.rollback();
     res.status(500).json({
       success: false,
       message: "Error processing notification",

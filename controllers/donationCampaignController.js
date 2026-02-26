@@ -204,9 +204,13 @@ exports.updateCampaign = async (req, res) => {
       });
     }
 
-    const updateData = req.body;
+    const updateData = { ...req.body };
     delete updateData.organizerId; // Cannot change organizer
     delete updateData.currentAmount; // Cannot manually change current amount
+
+    if (req.file) {
+      updateData.imageUrl = req.file.path;
+    }
 
     await campaign.update(updateData);
 

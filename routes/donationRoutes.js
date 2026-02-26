@@ -39,16 +39,13 @@ router.post(
 router.patch(
   "/campaigns/:id",
   authenticate,
+  uploadImage.single("image"),
   donationCampaignController.updateCampaign,
-);
-router.delete(
-  "/campaigns/:id",
-  authenticate,
-  donationCampaignController.deleteCampaign,
 );
 router.put(
   "/campaigns/:id",
   authenticate,
+  uploadImage.single("image"),
   donationCampaignController.updateCampaign,
 );
 router.delete(

@@ -139,19 +139,12 @@ exports.handleMidtransNotification = async (req, res) => {
     // For local testing, bypass Midtrans verification
     const isLocalTesting =
       process.env.NODE_ENV === "development" ||
-      !process.env.MIDTRANS_SERVER_KEY ||
-      process.env.MIDTRANS_SERVER_KEY === "YOUR_SERVER_KEY";
+      !process.env.MIDTRANS_SERVER_KEY;
 
     if (isLocalTesting) {
       statusResponse = notification;
     } else {
       // Production: Verify notification authenticity with Midtrans
-      const midtransClient = require("midtrans-client");
-      const snap = new midtransClient.Snap({
-        isProduction: process.env.MIDTRANS_IS_PRODUCTION === "true",
-        serverKey: process.env.MIDTRANS_SERVER_KEY,
-        clientKey: process.env.MIDTRANS_CLIENT_KEY,
-      });
       statusResponse = await snap.transaction.notification(notification);
     }
 

@@ -17,8 +17,7 @@ const aboutRoutes = require("./routes/aboutRoutes");
 const userRoutes = require("./routes/userRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const productRoutes = require("./routes/productRoutes");
-
-// ...
+const webhookRoutes = require("./routes/webhookRoutes");
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -88,6 +87,7 @@ app.use("/api/about", aboutRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/products", productRoutes);
+app.use("/api/webhooks", webhookRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
