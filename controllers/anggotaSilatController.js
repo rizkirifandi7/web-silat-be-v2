@@ -391,12 +391,6 @@ exports.verifyAnggota = async (req, res) => {
         {
           model: AnggotaSilat,
           as: "anggotaSilat",
-          attributes: [
-            "nomor_anggota",
-            "status_aktif",
-            "tingkatan_sabuk",
-            "tanggal_bergabung",
-          ],
         },
       ],
     });
@@ -422,9 +416,7 @@ exports.verifyAnggota = async (req, res) => {
         success: false,
         message: "Anggota tersebut sudah tidak aktif",
         data: {
-          nama: anggota.nama,
-          nomor_anggota: detail.nomor_anggota,
-          status_aktif: false,
+          ...anggota.get({ plain: true }),
         },
       });
     }
@@ -433,13 +425,7 @@ exports.verifyAnggota = async (req, res) => {
       success: true,
       message: "Data anggota terverifikasi",
       data: {
-        id: anggota.id,
-        nomor_anggota: detail.nomor_anggota,
-        nama: anggota.nama,
-        foto_url: anggota.foto_url,
-        tingkatan_sabuk: detail.tingkatan_sabuk,
-        status_aktif: detail.status_aktif,
-        tanggal_bergabung: detail.tanggal_bergabung,
+        ...anggota.get({ plain: true }),
       },
     });
   } catch (error) {
