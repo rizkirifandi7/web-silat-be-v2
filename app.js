@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const multer = require("multer");
 const app = express();
 const port = process.env.PORT || 8015;
 
@@ -91,7 +92,34 @@ app.use("/api/webhooks", webhookRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  // Handle Multer errors (file upload issues)
+  if (err instanceof multer.MulterError) {
+    let message = "File upload error";
+    if (err.code === "LIMIT_FILE_SIZE") {
+      message = "File terlalu besar. Maksimal 100MB untuk video.";
+    } else if (err.code === "LIMIT_UNEXPECTED_FILE") {
+      message = "Field file tidak sesuai. Gunakan field 'file'.";
+    }
+    return res.status(400).json({
+      success: false,
+      message,
+      error: err.message,
+      code: err.code,
+    });
+  }
+
+  // Handle file filter errors from multer (e.g. wrong file type)
+  if (
+    err.message &&
+    (err.message.includes("Only video") ||
+      err.message.includes("Only image") ||
+      err.message.includes("Only PDF"))
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: err.message,
+    });
+  }
 
   // Handle CORS errors
   if (err.message === "Not allowed by CORS") {
@@ -112,7 +140,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({
     success: false,
     message: "Something went wrong!",
-    error: process.env.NODE_ENV === "development" ? err.message : undefined,
+    error: err.message,
   });
 });
 

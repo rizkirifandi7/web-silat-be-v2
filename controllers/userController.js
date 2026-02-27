@@ -59,6 +59,27 @@ exports.getUserById = async (req, res) => {
 const { User, AnggotaSilat } = require("../models");
 const bcrypt = require("bcrypt");
 const { Op } = require("sequelize");
+const { cloudinary } = require("../middleware/uploadMiddleware");
+
+// Helper to delete file from Cloudinary based on URL
+const deleteCloudinaryFile = async (url) => {
+  if (!url) return;
+  try {
+    const splitUrl = url.split("/");
+    const uploadIndex = splitUrl.findIndex((p) => p === "upload");
+    if (uploadIndex === -1) return; // Not a standard cloudinary URL
+
+    const folderAndFile = splitUrl.slice(uploadIndex + 2).join("/");
+    const publicId = folderAndFile.substring(0, folderAndFile.lastIndexOf("."));
+
+    if (publicId) {
+      await cloudinary.uploader.destroy(publicId);
+      console.log(`[User] Deleted Cloudinary file: ${publicId}`);
+    }
+  } catch (err) {
+    console.error("[User] Cloudinary delete error:", err);
+  }
+};
 
 // Get all users with pagination and search
 exports.getAllUsers = async (req, res) => {
@@ -115,9 +136,16 @@ exports.getAllUsers = async (req, res) => {
 // Create new user (Admin only, support anggota detail)
 exports.createUser = async (req, res) => {
   try {
-    // Support body: { user: {...}, anggota: {...} }
-    const { user: userBody, anggota: anggotaBody } = req.body;
+    // Support body: { user: {...}, anggota: {...} } OR FormData parsing
+    let userBody = req.body.user;
+    let anggotaBody = req.body.anggota;
+
+    // Parse JSON if passed as string via FormData
+    if (typeof userBody === "string") userBody = JSON.parse(userBody);
+    if (typeof anggotaBody === "string") anggotaBody = JSON.parse(anggotaBody);
+
     let dataUser = userBody || req.body;
+    let foto_url = req.file ? req.file.path : null;
 
     const { nama, email, password, role, no_hp, alamat } = dataUser;
 
@@ -150,6 +178,7 @@ exports.createUser = async (req, res) => {
       role,
       no_hp: no_hp || null,
       alamat: alamat || null,
+      foto_url: foto_url || null,
     });
 
     // Jika role anggota dan ada anggotaBody, buat AnggotaSilat
@@ -169,6 +198,7 @@ exports.createUser = async (req, res) => {
         nama: user.nama,
         email: user.email,
         role: user.role,
+        foto_url: user.foto_url,
         anggota: anggota
           ? {
               id: anggota.id,
@@ -192,8 +222,14 @@ exports.createUser = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    // Support body: { user: {...}, anggota: {...} }
-    const { user: userBody, anggota: anggotaBody } = req.body;
+    // Support body: { user: {...}, anggota: {...} } OR FormData parsing
+    let userBody = req.body.user;
+    let anggotaBody = req.body.anggota;
+
+    // Parse JSON if passed as string via FormData
+    if (typeof userBody === "string") userBody = JSON.parse(userBody);
+    if (typeof anggotaBody === "string") anggotaBody = JSON.parse(anggotaBody);
+
     let dataUser = userBody || req.body;
 
     const { nama, email, role, no_hp, alamat, password } = dataUser;
@@ -226,6 +262,13 @@ exports.updateUser = async (req, res) => {
     };
     if (password) {
       updateData.password = password; // hooks in model will hash this
+    }
+    if (req.file) {
+      if (user.foto_url) {
+        // Delete the previous photo from Cloudinary
+        await deleteCloudinaryFile(user.foto_url);
+      }
+      updateData.foto_url = req.file.path;
     }
     await user.update(updateData);
 
@@ -262,6 +305,7 @@ exports.updateUser = async (req, res) => {
         nama: user.nama,
         email: user.email,
         role: user.role,
+        foto_url: user.foto_url,
         anggota: anggota
           ? {
               id: anggota.id,
@@ -299,6 +343,11 @@ exports.deleteUser = async (req, res) => {
         success: false,
         message: "User not found",
       });
+    }
+
+    // Hapus foto user dari Cloudinary sebelum hapus akun
+    if (user.foto_url) {
+      await deleteCloudinaryFile(user.foto_url);
     }
 
     await user.destroy();

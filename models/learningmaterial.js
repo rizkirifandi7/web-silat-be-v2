@@ -57,16 +57,15 @@ module.exports = (sequelize, DataTypes) => {
       fileUrl: {
         type: DataTypes.TEXT,
         allowNull: false,
-        validate: {
-          notEmpty: true,
-          isUrl: true,
-        },
+      },
+      fileType: {
+        type: DataTypes.STRING,
+      },
+      fileId: {
+        type: DataTypes.STRING,
       },
       thumbnailUrl: {
         type: DataTypes.TEXT,
-        validate: {
-          isUrl: true,
-        },
       },
       fileSize: {
         type: DataTypes.INTEGER,

@@ -19,11 +19,11 @@ const imageStorage = new CloudinaryStorage({
   },
 });
 
-const materialStorage = multer.memoryStorage();
+// Storage for videos (Materials) - use memory storage for external API upload
+const videoStorage = multer.memoryStorage();
 
-// Aliases for backward compatibility
-const videoStorage = materialStorage;
-const documentStorage = materialStorage;
+// Storage for documents (Materials) - use memory storage for external API upload
+const documentStorage = multer.memoryStorage();
 
 // File filter for images
 const imageFilter = (req, file, cb) => {
@@ -86,9 +86,8 @@ const uploadDocument = multer({
 });
 
 // Unified material upload (accepts both video and document)
-// NOW USING CLOUDINARY STORAGE INSTEAD OF MEMORY STORAGE
 const uploadMaterial = multer({
-  storage: materialStorage,
+  storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
     // Accept both video and document files
     const videoMimes = [

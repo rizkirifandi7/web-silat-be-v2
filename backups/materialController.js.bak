@@ -1,35 +1,7 @@
 const { LearningMaterial, User } = require("../models");
 const { Op } = require("sequelize");
-const { cloudinary } = require("../middleware/uploadMiddleware");
-
-/**
- * Helper: Upload a file buffer to Cloudinary using upload_stream.
- * This gives us full control over resource_type (video, raw, image, auto).
- * multer-storage-cloudinary does NOT support resource_type properly,
- * so we handle the upload manually here.
- */
-function uploadToCloudinary(fileBuffer, options = {}) {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      options,
-      (error, result) => {
-        if (error) return reject(error);
-        resolve(result);
-      },
-    );
-    stream.end(fileBuffer);
-  });
-}
-
-/**
- * Determine Cloudinary resource_type from mimetype.
- * - video/* -> "video"
- * - everything else (pdf, doc, ppt) -> "raw"
- */
-function getResourceType(mimetype) {
-  if (mimetype && mimetype.startsWith("video/")) return "video";
-  return "raw";
-}
+const { uploadToExternalAPI } = require("../services/uploadService");
+const axios = require("axios");
 
 // Get all materials
 exports.getAllMaterials = async (req, res) => {
@@ -94,7 +66,7 @@ exports.getMaterialById = async (req, res) => {
   }
 };
 
-// Upload material (WITH MULTER memoryStorage + manual Cloudinary upload)
+// Upload material (WITH MULTER - admin only)
 exports.uploadMaterial = async (req, res) => {
   try {
     const {
@@ -117,37 +89,20 @@ exports.uploadMaterial = async (req, res) => {
 
     let fileUrl = null;
     let fileSize = null;
-    let fileId = null;
     let thumbnailUrl = null;
     let uploadInfo = null;
 
     if (req.file) {
-      // Manual Cloudinary upload from memory buffer
-      const resourceType = getResourceType(req.file.mimetype);
-
-      console.log(
-        `[Material Upload] Uploading "${req.file.originalname}" to Cloudinary | mimetype: ${req.file.mimetype} | resource_type: ${resourceType} | size: ${req.file.size} bytes`,
-      );
-
-      const cloudResult = await uploadToCloudinary(req.file.buffer, {
-        folder: "silat/materials",
-        resource_type: resourceType,
-        public_id: `material_${Date.now()}`,
-      });
-
-      fileUrl = cloudResult.secure_url;
-      fileSize = cloudResult.bytes || req.file.size;
-      fileId = cloudResult.public_id;
-
+      // File upload mode — upload file to external API
+      const uploadResult = await uploadToExternalAPI(req.file);
+      fileUrl = uploadResult.fileUrl;
+      fileSize = uploadResult.fileSize;
       uploadInfo = {
-        fileName: req.file.originalname,
-        fileType: req.file.mimetype,
-        fileSize: cloudResult.bytes || req.file.size,
-        fileId: cloudResult.public_id,
-        cloudinaryUrl: cloudResult.secure_url,
+        fileName: uploadResult.fileName,
+        fileType: uploadResult.fileType,
+        fileSize: uploadResult.fileSize,
+        fileId: uploadResult.fileId,
       };
-
-      console.log(`[Material Upload] Success! URL: ${cloudResult.secure_url}`);
     } else if (bodyFileUrl && bodyFileUrl.trim() !== "") {
       // URL mode — use provided URL directly
       fileUrl = bodyFileUrl.trim();
@@ -171,7 +126,6 @@ exports.uploadMaterial = async (req, res) => {
       fileUrl,
       thumbnailUrl,
       fileSize,
-      fileId,
       duration: duration || null,
       uploadedBy,
       accessLevel: accessLevel || "anggota_only",
@@ -193,7 +147,6 @@ exports.uploadMaterial = async (req, res) => {
 
     res.status(201).json(response);
   } catch (error) {
-    console.error("[Material Upload] Error:", error);
     res.status(500).json({
       success: false,
       message: "Error uploading material",
@@ -244,20 +197,34 @@ exports.deleteMaterial = async (req, res) => {
         .json({ success: false, message: "Material not found" });
     }
 
-    // Hapus file dari Cloudinary
+    // Hapus file di cloud jika ada fileId (POST ke /file-entries/delete)
     let cloudDeleteSuccess = true;
     let cloudDeleteError = null;
-
     if (material.fileId) {
       try {
-        const resourceType = material.type === "video" ? "video" : "raw";
-        await cloudinary.uploader.destroy(material.fileId, {
-          resource_type: resourceType,
-        });
+        await axios.post(
+          `https://cloud.shelterdata.id/api/v1/file-entries/delete`,
+          {
+            entryIds: [String(material.fileId)],
+            deleteForever: true,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.EXTERNAL_UPLOAD_API_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+          },
+        );
       } catch (err) {
         cloudDeleteSuccess = false;
-        cloudDeleteError = err.message;
-        console.error("Cloudinary file delete error:", err);
+        cloudDeleteError = err.response?.data || err.message;
+        // Tambahkan log error detail ke console
+        console.error("Cloud file delete error:", {
+          fileId: material.fileId,
+          error: err.response?.data || err.message,
+          status: err.response?.status,
+          headers: err.response?.headers,
+        });
       }
     }
 
