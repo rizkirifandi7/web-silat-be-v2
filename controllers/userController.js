@@ -1,3 +1,7 @@
+const { User, AnggotaSilat } = require("../models");
+const { Op } = require("sequelize");
+const { cloudinary } = require("../middleware/uploadMiddleware");
+
 // Get user by id (Admin only)
 exports.getUserById = async (req, res) => {
   try {
@@ -8,15 +12,6 @@ exports.getUserById = async (req, res) => {
         {
           model: AnggotaSilat,
           as: "anggotaSilat",
-          attributes: [
-            "id",
-            "nomor_anggota",
-            "tingkatan_sabuk",
-            "status_aktif",
-            "tanggal_lahir",
-            "tempat_lahir",
-            "jenis_kelamin",
-          ],
         },
       ],
     });
@@ -34,18 +29,8 @@ exports.getUserById = async (req, res) => {
     res.json({
       success: true,
       data: {
-        id: user.id,
-        nama: user.nama,
-        email: user.email,
-        role: user.role,
-        nik: user.nik,
-        tempat_lahir: user.anggotaSilat?.tempat_lahir || user.tempat_lahir,
-        tanggal_lahir: user.anggotaSilat?.tanggal_lahir || user.tanggal_lahir,
-        jenis_kelamin: user.anggotaSilat?.jenis_kelamin || user.jenis_kelamin,
+        ...user.get({ plain: true }),
         sabuk,
-        no_hp: user.no_hp,
-        alamat: user.alamat,
-        anggotaSilat: user.anggotaSilat,
       },
     });
   } catch (error) {
@@ -56,10 +41,6 @@ exports.getUserById = async (req, res) => {
     });
   }
 };
-const { User, AnggotaSilat } = require("../models");
-const bcrypt = require("bcrypt");
-const { Op } = require("sequelize");
-const { cloudinary } = require("../middleware/uploadMiddleware");
 
 // Helper to delete file from Cloudinary based on URL
 const deleteCloudinaryFile = async (url) => {
