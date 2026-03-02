@@ -1,6 +1,7 @@
 const { LearningMaterial, User } = require("../models");
 const { Op } = require("sequelize");
 const { cloudinary } = require("../middleware/uploadMiddleware");
+const path = require("path");
 
 /**
  * Helper: Upload a file buffer to Cloudinary using upload_stream.
@@ -129,10 +130,18 @@ exports.uploadMaterial = async (req, res) => {
         `[Material Upload] Uploading "${req.file.originalname}" to Cloudinary | mimetype: ${req.file.mimetype} | resource_type: ${resourceType} | size: ${req.file.size} bytes`,
       );
 
+      let publicId = `material_${Date.now()}`;
+      if (resourceType === "raw" && req.file.originalname) {
+        const ext = path.extname(req.file.originalname);
+        if (ext) {
+          publicId += ext;
+        }
+      }
+
       const cloudResult = await uploadToCloudinary(req.file.buffer, {
         folder: "silat/materials",
         resource_type: resourceType,
-        public_id: `material_${Date.now()}`,
+        public_id: publicId,
       });
 
       fileUrl = cloudResult.secure_url;
@@ -213,7 +222,85 @@ exports.updateMaterial = async (req, res) => {
         .json({ success: false, message: "Material not found" });
     }
 
-    await material.update(req.body);
+    const {
+      title,
+      description,
+      type,
+      category,
+      sabuk,
+      duration,
+      accessLevel,
+      fileUrl: bodyFileUrl,
+      isActive,
+    } = req.body;
+
+    let updateData = {
+      title,
+      description,
+      type,
+      category,
+      sabuk,
+      duration,
+      accessLevel,
+      isActive,
+    };
+
+    // Handle new file upload
+    if (req.file) {
+      const resourceType = getResourceType(req.file.mimetype);
+
+      let publicId = `material_${Date.now()}`;
+      if (resourceType === "raw" && req.file.originalname) {
+        const ext = path.extname(req.file.originalname);
+        if (ext) {
+          publicId += ext;
+        }
+      }
+
+      const cloudResult = await uploadToCloudinary(req.file.buffer, {
+        folder: "silat/materials",
+        resource_type: resourceType,
+        public_id: publicId,
+      });
+
+      updateData.fileUrl = cloudResult.secure_url;
+      updateData.fileSize = cloudResult.bytes || req.file.size;
+      updateData.fileId = cloudResult.public_id;
+      if (type === "video") {
+        updateData.thumbnailUrl = null;
+      }
+
+      // Delete old file from Cloudinary if it exists
+      if (material.fileId) {
+        try {
+          const oldResourceType = material.type === "video" ? "video" : "raw";
+          await cloudinary.uploader.destroy(material.fileId, {
+            resource_type: oldResourceType,
+          });
+        } catch (err) {
+          console.error("Cloudinary old file delete error:", err);
+        }
+      }
+    } else if (bodyFileUrl && bodyFileUrl.trim() !== "") {
+      // URL Mode Update
+      updateData.fileUrl = bodyFileUrl.trim();
+      updateData.fileSize = null;
+
+      // If material previously had a file, delete it from cloudinary
+      if (material.fileId && material.fileUrl !== updateData.fileUrl) {
+        try {
+          const oldResourceType = material.type === "video" ? "video" : "raw";
+          await cloudinary.uploader.destroy(material.fileId, {
+            resource_type: oldResourceType,
+          });
+          updateData.fileId = null;
+        } catch (err) {
+          console.error("Cloudinary old file delete error:", err);
+        }
+      }
+    }
+
+    await material.update(updateData);
 
     const updatedMaterial = await LearningMaterial.findByPk(material.id, {
       include: [{ model: User, as: "uploader", attributes: ["id", "nama"] }],

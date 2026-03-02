@@ -44,6 +44,7 @@ router.patch(
   "/:id",
   authenticate,
   authorize("admin"),
+  uploadMaterial.single("file"),
   materialController.updateMaterial,
 );
 router.delete(
