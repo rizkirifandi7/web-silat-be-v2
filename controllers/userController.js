@@ -1,6 +1,13 @@
-const { User, AnggotaSilat } = require("../models");
+const { User, AnggotaSilat, sequelize } = require("../models");
 const { Op } = require("sequelize");
 const { cloudinary } = require("../middleware/uploadMiddleware");
+
+// Helper to sanitize date strings
+const sanitizeDate = (dateStr) => {
+  if (!dateStr || dateStr === "Invalid date" || dateStr.trim() === "")
+    return null;
+  return dateStr;
+};
 
 // Get user by id (Admin only)
 exports.getUserById = async (req, res) => {
@@ -116,6 +123,7 @@ exports.getAllUsers = async (req, res) => {
 
 // Create new user (Admin only, support anggota detail)
 exports.createUser = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
     // Support body: { user: {...}, anggota: {...} } OR FormData parsing
     let userBody = req.body.user;
@@ -132,19 +140,25 @@ exports.createUser = async (req, res) => {
 
     // Validate required fields
     if (!nama || !email || !password || !role) {
+      await t.rollback();
       return res.status(400).json({
         success: false,
         message: "Nama, email, password, and role are required",
       });
     }
     if (password.length < 6) {
+      await t.rollback();
       return res.status(400).json({
         success: false,
         message: "Password must be at least 6 characters long",
       });
     }
-    const existingUser = await User.findOne({ where: { email } });
+    const existingUser = await User.findOne({
+      where: { email },
+      transaction: t,
+    });
     if (existingUser) {
+      await t.rollback();
       return res.status(400).json({
         success: false,
         message: "Email already registered",
@@ -152,24 +166,42 @@ exports.createUser = async (req, res) => {
     }
 
     // Buat user
-    const user = await User.create({
-      nama,
-      email,
-      password, // hooks in model will hash this
-      role,
-      no_hp: no_hp || null,
-      alamat: alamat || null,
-      foto_url: foto_url || null,
-    });
+    const user = await User.create(
+      {
+        nama,
+        email,
+        password, // hooks in model will hash this
+        role,
+        no_hp: no_hp || null,
+        alamat: alamat || null,
+        foto_url: foto_url || null,
+      },
+      { transaction: t },
+    );
 
     // Jika role anggota dan ada anggotaBody, buat AnggotaSilat
     let anggota = null;
     if (role === "anggota" && anggotaBody) {
-      anggota = await AnggotaSilat.create({
-        userId: user.id,
-        ...anggotaBody,
-      });
+      // Sanitize dates
+      if (anggotaBody.tanggal_lahir !== undefined) {
+        anggotaBody.tanggal_lahir = sanitizeDate(anggotaBody.tanggal_lahir);
+      }
+      if (anggotaBody.tanggal_bergabung !== undefined) {
+        anggotaBody.tanggal_bergabung = sanitizeDate(
+          anggotaBody.tanggal_bergabung,
+        );
+      }
+
+      anggota = await AnggotaSilat.create(
+        {
+          userId: user.id,
+          ...anggotaBody,
+        },
+        { transaction: t },
+      );
     }
+
+    await t.commit();
 
     res.status(201).json({
       success: true,
@@ -190,6 +222,7 @@ exports.createUser = async (req, res) => {
       },
     });
   } catch (error) {
+    if (t) await t.rollback();
     console.error("Error creating user:", error);
     res.status(500).json({
       success: false,
@@ -201,6 +234,7 @@ exports.createUser = async (req, res) => {
 
 // Update user (Admin only, support anggota detail)
 exports.updateUser = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
     const { id } = req.params;
     // Support body: { user: {...}, anggota: {...} } OR FormData parsing
@@ -215,8 +249,9 @@ exports.updateUser = async (req, res) => {
 
     const { nama, email, role, no_hp, alamat, password } = dataUser;
 
-    const user = await User.findByPk(id);
+    const user = await User.findByPk(id, { transaction: t });
     if (!user) {
+      await t.rollback();
       return res.status(404).json({
         success: false,
         message: "User not found",
@@ -225,8 +260,12 @@ exports.updateUser = async (req, res) => {
 
     // Check email uniqueness if changed
     if (email && email !== user.email) {
-      const existingUser = await User.findOne({ where: { email } });
+      const existingUser = await User.findOne({
+        where: { email },
+        transaction: t,
+      });
       if (existingUser) {
+        await t.rollback();
         return res.status(400).json({
           success: false,
           message: "Email already registered",
@@ -251,32 +290,62 @@ exports.updateUser = async (req, res) => {
       }
       updateData.foto_url = req.file.path;
     }
-    await user.update(updateData);
+    await user.update(updateData, { transaction: t });
 
     // Jika role anggota dan ada anggotaBody, update/insert AnggotaSilat
     let anggota = null;
     if (role === "anggota" && anggotaBody) {
-      const { tempat_lahir, tanggal_lahir, jenis_kelamin, tingkatan_sabuk } =
-        anggotaBody;
+      // Sanitize fields before creating or updating
+      if (anggotaBody.tanggal_lahir !== undefined) {
+        anggotaBody.tanggal_lahir = sanitizeDate(anggotaBody.tanggal_lahir);
+      }
+      if (anggotaBody.tanggal_bergabung !== undefined) {
+        anggotaBody.tanggal_bergabung = sanitizeDate(
+          anggotaBody.tanggal_bergabung,
+        );
+      }
+
+      const {
+        tempat_lahir,
+        tanggal_lahir,
+        tanggal_bergabung,
+        jenis_kelamin,
+        tingkatan_sabuk,
+        status_aktif,
+        status_perguruan,
+      } = anggotaBody;
+
       const [anggotaSilat, created] = await AnggotaSilat.findOrCreate({
         where: { userId: user.id },
         defaults: {
           tempat_lahir,
           tanggal_lahir,
+          tanggal_bergabung,
           jenis_kelamin,
           tingkatan_sabuk,
+          status_aktif,
+          status_perguruan,
         },
+        transaction: t,
       });
       if (!created) {
-        await anggotaSilat.update({
-          tempat_lahir,
-          tanggal_lahir,
-          jenis_kelamin,
-          tingkatan_sabuk,
-        });
+        await anggotaSilat.update(
+          {
+            tempat_lahir,
+            tanggal_lahir,
+            tanggal_bergabung,
+            jenis_kelamin,
+            tingkatan_sabuk,
+            status_aktif,
+            status_perguruan,
+          },
+          { transaction: t },
+        );
       }
       anggota = anggotaSilat;
     }
+
+    await t.commit();
 
     res.json({
       success: true,
@@ -297,6 +366,7 @@ exports.updateUser = async (req, res) => {
       },
     });
   } catch (error) {
+    if (t) await t.rollback();
     res.status(500).json({
       success: false,
       message: "Error updating user",
