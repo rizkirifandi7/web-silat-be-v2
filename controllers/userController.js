@@ -9,6 +9,36 @@ const sanitizeDate = (dateStr) => {
   return dateStr;
 };
 
+// Helper function to generate nomor anggota
+const generateNomorAnggota = async (transaction) => {
+  const year = new Date().getFullYear();
+  const prefix = `PUSAMADA-${year}-`;
+
+  // Get last member number for this year
+  const lastAnggota = await AnggotaSilat.findOne({
+    where: {
+      nomor_anggota: {
+        [Op.like]: `${prefix}%`,
+      },
+    },
+    order: [["nomor_anggota", "DESC"]],
+    transaction,
+  });
+
+  let nextNumber = 1;
+  if (lastAnggota && lastAnggota.nomor_anggota) {
+    const parts = lastAnggota.nomor_anggota.split("-");
+    if (parts.length >= 3) {
+      const lastNumber = parseInt(parts[2]);
+      if (!isNaN(lastNumber)) {
+        nextNumber = lastNumber + 1;
+      }
+    }
+  }
+
+  return `${prefix}${String(nextNumber).padStart(4, "0")}`;
+};
+
 // Get user by id (Admin only)
 exports.getUserById = async (req, res) => {
   try {
@@ -192,9 +222,13 @@ exports.createUser = async (req, res) => {
         );
       }
 
+      // Generate nomor anggota
+      const nomor_anggota = await generateNomorAnggota(t);
+
       anggota = await AnggotaSilat.create(
         {
           userId: user.id,
+          nomor_anggota,
           ...anggotaBody,
         },
         { transaction: t },
@@ -315,21 +349,30 @@ exports.updateUser = async (req, res) => {
         status_perguruan,
       } = anggotaBody;
 
-      const [anggotaSilat, created] = await AnggotaSilat.findOrCreate({
+      // Note: Only search, if it's created, we must generate an ID
+      const existingAnggotaSilat = await AnggotaSilat.findOne({
         where: { userId: user.id },
-        defaults: {
-          tempat_lahir,
-          tanggal_lahir,
-          tanggal_bergabung,
-          jenis_kelamin,
-          tingkatan_sabuk,
-          status_aktif,
-          status_perguruan,
-        },
         transaction: t,
       });
-      if (!created) {
-        await anggotaSilat.update(
+
+      if (!existingAnggotaSilat) {
+        const nomor_anggota = await generateNomorAnggota(t);
+        anggota = await AnggotaSilat.create(
+          {
+            userId: user.id,
+            nomor_anggota,
+            tempat_lahir,
+            tanggal_lahir,
+            tanggal_bergabung,
+            jenis_kelamin,
+            tingkatan_sabuk,
+            status_aktif,
+            status_perguruan,
+          },
+          { transaction: t },
+        );
+      } else {
+        await existingAnggotaSilat.update(
           {
             tempat_lahir,
             tanggal_lahir,
@@ -341,8 +384,8 @@ exports.updateUser = async (req, res) => {
           },
           { transaction: t },
         );
+        anggota = existingAnggotaSilat;
       }
-      anggota = anggotaSilat;
     }
 
     await t.commit();
