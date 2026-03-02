@@ -329,8 +329,9 @@ exports.getPaymentsByUser = async (req, res) => {
   }
 };
 
-// Check payment status
+// Check and sync payment status
 exports.checkPaymentStatus = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
     const { orderId } = req.params;
 
@@ -343,11 +344,63 @@ exports.checkPaymentStatus = async (req, res) => {
     });
 
     if (!payment) {
+      await t.rollback();
       return res.status(404).json({
         success: false,
         message: "Payment not found",
       });
     }
+
+    const transactionStatus = statusResponse.transaction_status;
+    const fraudStatus = statusResponse.fraud_status;
+
+    let paymentStatus = "pending";
+    if (transactionStatus === "capture") {
+      if (fraudStatus === "accept") paymentStatus = "settlement";
+    } else if (transactionStatus === "settlement") {
+      paymentStatus = "settlement";
+    } else if (["cancel", "deny", "expire"].includes(transactionStatus)) {
+      paymentStatus = transactionStatus;
+    }
+
+    // Update payment
+    await payment.update(
+      {
+        paymentStatus,
+        midtransTransactionId:
+          statusResponse.transaction_id || payment.midtransTransactionId,
+        paymentDate:
+          paymentStatus === "settlement" ? new Date() : payment.paymentDate,
+        transactionId: statusResponse.transaction_id || payment.transactionId,
+      },
+      { transaction: t },
+    );
+
+    // Auto-register user to event after successful payment
+    if (paymentStatus === "settlement") {
+      const existingReg = await EventRegistration.findOne({
+        where: { eventId: payment.eventId, userId: payment.userId },
+      });
+
+      if (!existingReg) {
+        await EventRegistration.create(
+          {
+            eventId: payment.eventId,
+            userId: payment.userId,
+            paymentId: payment.id,
+            status: "confirmed",
+          },
+          { transaction: t },
+        );
+
+        const event = await Event.findByPk(payment.eventId);
+        if (event) {
+          await event.increment("registeredCount", { transaction: t });
+        }
+      }
+    }
+
+    await t.commit();
 
     res.json({
       success: true,
@@ -357,6 +410,7 @@ exports.checkPaymentStatus = async (req, res) => {
       },
     });
   } catch (error) {
+    await t.rollback();
     res.status(500).json({
       success: false,
       message: "Error checking payment status",
