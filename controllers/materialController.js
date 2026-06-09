@@ -50,7 +50,7 @@ exports.getAllMaterials = async (req, res) => {
       include: [{ model: User, as: "uploader", attributes: ["id", "nama"] }],
       limit: parseInt(limit),
       offset: parseInt(offset),
-      order: [["createdAt", "DESC"]],
+      order: [["position", "ASC"], ["createdAt", "DESC"]],
     });
 
     res.json({
@@ -171,6 +171,8 @@ exports.uploadMaterial = async (req, res) => {
       thumbnailUrl = null;
     }
 
+    const maxPosition = (await LearningMaterial.max("position")) || 0;
+
     const material = await LearningMaterial.create({
       title,
       description,
@@ -184,6 +186,7 @@ exports.uploadMaterial = async (req, res) => {
       duration: duration || null,
       uploadedBy,
       accessLevel: accessLevel || "anggota_only",
+      position: maxPosition + 1,
     });
 
     const materialWithDetails = await LearningMaterial.findByPk(material.id, {
@@ -406,6 +409,48 @@ exports.incrementDownload = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error incrementing download count",
+      error: error.message,
+    });
+  }
+};
+
+// Reorder materials (admin only)
+exports.reorderMaterials = async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or missing 'ids' array in request body",
+      });
+    }
+
+    const transaction = await LearningMaterial.sequelize.transaction();
+
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
+        await LearningMaterial.update(
+          { position: i + 1 },
+          { where: { id }, transaction }
+        );
+      }
+
+      await transaction.commit();
+
+      res.json({
+        success: true,
+        message: "Materials reordered successfully",
+      });
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error reordering materials",
       error: error.message,
     });
   }

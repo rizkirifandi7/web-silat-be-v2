@@ -33,6 +33,13 @@ router.post(
 );
 
 // Admin only routes - with file upload
+router.put(
+  "/reorder",
+  authenticate,
+  authorize("admin"),
+  materialController.reorderMaterials,
+);
+
 router.post(
   "/",
   authenticate,

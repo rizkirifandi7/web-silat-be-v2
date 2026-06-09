@@ -79,7 +79,7 @@ exports.createAnggota = async (req, res) => {
       nomor_anggota,
       tempat_lahir,
       tanggal_lahir,
-      jenis_kelamin,
+      jenis_kelamin: jenis_kelamin ? jenis_kelamin.toLowerCase() : undefined,
       status_perguruan,
       tingkatan_sabuk,
       tanggal_bergabung: new Date(),
@@ -265,6 +265,10 @@ exports.updateAnggota = async (req, res) => {
     // Don't allow updating userId or nomor_anggota
     delete updateData.userId;
     delete updateData.nomor_anggota;
+
+    if (updateData.jenis_kelamin) {
+      updateData.jenis_kelamin = updateData.jenis_kelamin.toLowerCase();
+    }
 
     const anggota = await AnggotaSilat.findByPk(id);
 

@@ -221,6 +221,9 @@ exports.createUser = async (req, res) => {
           anggotaBody.tanggal_bergabung,
         );
       }
+      if (anggotaBody.jenis_kelamin) {
+        anggotaBody.jenis_kelamin = anggotaBody.jenis_kelamin.toLowerCase();
+      }
 
       // Generate nomor anggota
       const nomor_anggota = await generateNomorAnggota(t);
@@ -337,6 +340,9 @@ exports.updateUser = async (req, res) => {
         anggotaBody.tanggal_bergabung = sanitizeDate(
           anggotaBody.tanggal_bergabung,
         );
+      }
+      if (anggotaBody.jenis_kelamin) {
+        anggotaBody.jenis_kelamin = anggotaBody.jenis_kelamin.toLowerCase();
       }
 
       const {
